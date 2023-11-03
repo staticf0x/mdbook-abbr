@@ -12,7 +12,7 @@ cargo install mdbook-abbr
 
 ```toml
 [preprocessor.abbr]
-# This enabled the preprocessor
+# This enables the preprocessor
 
 [preprocessor.abbr.list]
 # List the abbrevations and their expansions
