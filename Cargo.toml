@@ -1,6 +1,6 @@
 [package]
 name = "mdbook-abbr"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["staticf0x <staticf0x@pm.me>"]
 description = "mdBook preprocessor that expands defined abbreviations"
