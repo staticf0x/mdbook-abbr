@@ -1,6 +1,10 @@
-use mdbook::preprocess::{CmdPreprocessor, Preprocessor, PreprocessorContext};
-use mdbook::Config;
+use log::debug;
+use mdbook_preprocessor::book::{Book, BookItem};
+use mdbook_preprocessor::config::Config;
+use mdbook_preprocessor::{parse_input, Preprocessor, PreprocessorContext};
 use regex::Regex;
+use serde::Deserialize;
+use std::collections::HashMap;
 use std::env;
 use std::io;
 use std::process;
@@ -8,7 +12,7 @@ use std::vec;
 
 const NAME: &str = "abbr";
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 struct Abbreviation {
     abbr: String,
     expanded: String,
@@ -33,11 +37,12 @@ impl Preprocessor for Abbr {
 
     fn run(
         &self,
-        ctx: &mdbook::preprocess::PreprocessorContext,
-        mut book: mdbook::book::Book,
-    ) -> mdbook::errors::Result<mdbook::book::Book> {
+        _ctx: &PreprocessorContext,
+        mut book: Book,
+    ) -> mdbook_preprocessor::errors::Result<Book> {
         book.for_each_mut(|item| {
-            if let mdbook::book::BookItem::Chapter(chap) = item {
+            if let BookItem::Chapter(chap) = item {
+                debug!("Processing chapter: {}", chap.name);
                 for abbr in &self.list {
                     // Find and replace all abbreviations defined in config
                     let re = Regex::new(format!("\\b({})\\b", abbr.abbr).as_str()).unwrap();
@@ -54,31 +59,37 @@ impl Preprocessor for Abbr {
         Ok(book)
     }
 
-    fn supports_renderer(&self, _renderer: &str) -> bool {
-        true
+    fn supports_renderer(&self, _renderer: &str) -> mdbook_preprocessor::errors::Result<bool> {
+        Ok(true)
     }
 }
 
 /// Get the abbreviation -> expansion config
 fn get_abbr_table(config: &Config) -> Option<Vec<Abbreviation>> {
-    let preprocessor_config = config.get("preprocessor")?;
-    let abbr_config = preprocessor_config.get("abbr")?;
-    let abbr_table = abbr_config.get("list")?;
+    let abbr_table: HashMap<String, String> = config
+        .get::<HashMap<String, String>>("preprocessor.abbr.list")
+        .expect("Couldn't get preprocessor.abbr.list")?;
+
+    debug!(
+        "Found {} abbreviations in preprocessor.abbr.list",
+        abbr_table.len()
+    );
 
     Some(
         abbr_table
-            .as_table()
-            .unwrap()
             .iter()
-            .map(|(k, v)| Abbreviation {
-                abbr: k.clone(),
-                expanded: String::from(v.as_str().unwrap()),
+            .into_iter()
+            .map(|(key, value)| Abbreviation {
+                abbr: key.to_string(),
+                expanded: value.to_string(),
             })
-            .collect(),
+            .collect::<Vec<Abbreviation>>(),
     )
 }
 
 fn main() {
+    env_logger::init();
+
     let args: Vec<String> = env::args().collect();
 
     if args.len() > 1 {
@@ -88,7 +99,9 @@ fn main() {
         }
     }
 
-    let (ctx, book) = CmdPreprocessor::parse_input(io::stdin()).expect("Failed to parse input");
+    debug!("Running mdbook-abbr preprocessor");
+
+    let (ctx, book) = parse_input(io::stdin()).expect("Failed to parse input");
     let preprocessor = Abbr::new(&ctx);
     let processed_book = preprocessor.run(&ctx, book);
 
